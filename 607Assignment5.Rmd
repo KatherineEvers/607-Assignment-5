@@ -1,0 +1,154 @@
+---
+title: "607 Assignment 5: Tidying and Transforming Data"
+author: "Katherine Evers"
+date: "2/28/2019"
+output: html_document
+---
+###Contents
+1. [Project overview](#project_overview)  
+2. [Load libraries and import data](#load)
+3. [Tidy Data](#tidy)
+4. [Analyze Data](#analyze)
+5. [Visualize Data](#vis)
+
+<a id="project_overview"></a>
+
+###Assignment Overview
+The chart below describes arrival delays for two airlines across five destinations. 
+
+```{r}
+knitr::include_graphics('/Users/katieevers/Desktop/airlineTable.png')
+```
+
+Your task is to:  
+1. Create a .CSV file that includes all of the information above. You’re encouraged to use a “wide” structure similar to how the information appears above, so that you can practice tidying and transformations as described below.  
+2. Read the information from your.CSV file into R, and use tidyr and dplyr as needed to tidy and transform your data.  
+3. Perform analysis to compare the arrival delays for the two airlines.  
+
+<a id="load"></a>
+
+###Load libraries and import data
+```{r}
+
+library("tidyr")
+library("dplyr")
+library("kableExtra")
+library("ggplot2")
+
+airlines <- read.csv("https://raw.githubusercontent.com/KatherineEvers/airlines/master/airlines.csv", header = TRUE)
+
+airlines
+```
+
+<a id="tidy"></a>
+
+###Tidy Data
+Tidy data so that each variable forms a column and each observation forms a row:
+
+```{r}
+tidyDf <- airlines %>%
+  #separate data into destination and count columns
+  gather(Destination, Count, 3:7) %>%
+  #spread flight status into separate columns
+  spread(2,4)
+
+#manipulate table style
+tidyDf  %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+  
+```
+
+
+```{r}
+#arrange rows by destination 
+tidyDf2 <- tidyDf %>%
+  arrange(Destination, Airline)
+
+tidyDf2  %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+<a id="analyze"></a>
+
+###Analyze data
+
+```{r}
+#calculate the percentages of delayed and on time flights for each airline and destination
+tidyDf3 <- tidyDf2 %>% 
+        mutate(total = delayed + `on time`, percentDelayed = round(delayed / total * 100, 2), 
+               percentOnTime = round(100 * `on time` / total, 2)) 
+        
+tidyDf3  %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+
+#create summary table comparing percentage of total delayed flights for each airline
+summaryDf <- tidyDf3 %>% 
+  group_by(Airline) %>% 
+  summarise(totalDelayed = sum(delayed), totalOnTime = sum(`on time`), totalFlights = sum(total)) %>% 
+  mutate(percentDelayed = round(totalDelayed/totalFlights * 100, 2))
+
+summaryDf  %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+
+#order destinations by decreasing percentage of total delayed flights
+destinationDelays <- tidyDf3 %>% 
+  group_by(Destination) %>% 
+  summarise(averageDelayPercent = round(mean(percentDelayed),2)) %>% 
+  arrange(desc(averageDelayPercent))
+
+destinationDelays  %>% 
+  kable(row.names = TRUE) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+<a id="vis"></a>
+
+###Visualize data
+```{r}
+#create bar graphs comparing the number of flights for each airline by destination
+plot <- ggplot(tidyDf3, aes(y = total, x = Airline, color = Airline, fill = Airline)) + 
+    geom_bar( stat = "identity") +
+    geom_text(aes(label = total), vjust = -.3) +
+    facet_wrap(~Destination) +
+    ylim(0, 5500) +
+    ylab("Number of Flights") +
+    ggtitle("Number of Fights by Airline and Destination")
+
+plot
+
+plot1 <- ggplot(summaryDf, aes(Airline, percentDelayed)) + 
+  geom_bar(aes(fill = Airline), position = "dodge", stat = "identity") + 
+  geom_text(aes(label = percentDelayed), vjust = -.3) +
+  ylab("Percentage of Delayed Flights") +
+  ggtitle("Total Percentage of Delayed Flights by Airline")
+
+plot1
+
+#create bar graphs comparing the percentages of delayed flights for each airline by destination
+plot2 <- ggplot(tidyDf3, aes(y=percentDelayed, x = Airline, color = Airline, fill = Airline)) + 
+    geom_bar( stat = "identity") +
+    geom_text(aes(label = percentDelayed), vjust = -.3) +
+    facet_wrap(~Destination) +
+    ylim(0, 35) +
+    ylab("Percentage of Delayed Flights") +
+    ggtitle("Percentage of Delayed Flights by Airline and Destination")
+    
+plot2
+
+#create a line graph comparing the percentages of delayed flights for each airline by destination
+plot3 <- ggplot(tidyDf3, aes(x = Destination, y = percentDelayed, group = Airline, color = Airline, shape = Airline)) + 
+  geom_point(aes(shape = Airline)) + 
+  geom_line() + 
+  geom_text(aes(label = percentDelayed), vjust = -.7) +
+  labs(x = "Destination", y = "Percentage of Delayed flights") + 
+  theme(legend.title=element_blank()) +
+  ggtitle("Percentage of Delayed Flights by Airline and Destination")
+
+plot3
+```
+
+Based on this analysis, America West Airlines has a smaller percentage of total delayed flights than Alaska Airlines. However, Alaska has smaller percentages of delayed flights than America West by destination. It is notable that American West has 5255 flights to Phoenix with 7.9% of those flights being delayed, while Alaska has only 233 Phoenix flights with 5.15% of flights delayed. In addition, America West has only 262 flights to Seattle with 23.28% of flights delayed, while Alaska has 2146 Seattle flights with 14.21% delayed.
